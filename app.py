@@ -54,7 +54,6 @@ def run_simulation(qubits, strength, model):
     """
     
     # [가상 로직 1: 최적 펄스 생성]
-    # ✨ (수정) 이제 모델별로 다른 펄스를 생성합니다. ✨
     pulse_steps = 50
     optimal_pulse_data = [] # 빈 리스트로 초기화
 
@@ -62,6 +61,17 @@ def run_simulation(qubits, strength, model):
     final_energy = 100.0
     learning_time = 5.0
     model_params = 10000
+
+    # ✨ [가상 로직 3: 블로흐 구면 궤적] ✨
+    # 궤적을 저장할 리스트
+    trajectory_steps = []
+    # 모든 궤적은 |0> 상태 (북극)에서 시작
+    start_theta = 0.0 
+    start_phi = 0.0
+    
+    # 모델별 최종 상태 (theta, phi)
+    final_theta = np.pi / 2.0 # 기본값 (적도)
+    final_phi = 0.0           # 기본값 (X축)
 
     if model == 'MLP':
         final_energy += 30.0
@@ -71,6 +81,9 @@ def run_simulation(qubits, strength, model):
         base_pulse = np.sin(np.linspace(0, np.pi * 2, pulse_steps)) * strength * 0.8 # 80% A
         noise = np.random.randn(pulse_steps) * 0.15 # 노이즈 증가
         optimal_pulse_data = list(base_pulse + noise)
+        # (최종 상태 1)
+        final_theta = np.pi / 1.5 + (strength * 0.1)
+        final_phi = np.pi / 3.0 + (qubits * 0.1)
 
     elif model == 'MLP (Set)':
         final_energy += 15.0
@@ -80,6 +93,9 @@ def run_simulation(qubits, strength, model):
         base_pulse = np.sin(np.linspace(0, np.pi * 3, pulse_steps)) * strength # 주파수 1.5배
         noise = np.random.randn(pulse_steps) * 0.1
         optimal_pulse_data = list(base_pulse + noise)
+        # (최종 상태 2)
+        final_theta = np.pi / 2.0 - (strength * 0.2)
+        final_phi = np.pi * 1.5 + (qubits * 0.05)
 
     elif model == 'GCN':
         final_energy -= 10.0
@@ -89,6 +105,9 @@ def run_simulation(qubits, strength, model):
         base_pulse = np.sin(np.linspace(0, np.pi * 2, pulse_steps)) * strength
         noise = np.random.randn(pulse_steps) * 0.1 * (qubits / 8.0) # 큐비트 최대 8로 스케일
         optimal_pulse_data = list(base_pulse + noise)
+        # (최종 상태 3) - Z축에 가깝게
+        final_theta = np.pi / 4.0 + (strength * 0.1)
+        final_phi = np.pi / 2.0 + (qubits * 0.2)
 
     elif model == 'GAT':
         final_energy -= 15.0
@@ -98,6 +117,17 @@ def run_simulation(qubits, strength, model):
         base_pulse = np.cos(np.linspace(0, np.pi * 2, pulse_steps)) * strength # Cosine 펄스
         noise = np.random.randn(pulse_steps) * 0.05 # 노이즈 감소
         optimal_pulse_data = list(base_pulse + noise)
+        # (최종 상태 4) - Y축에 가깝게
+        final_theta = np.pi / 2.1 + (strength * 0.05)
+        final_phi = np.pi / 1.9 + (qubits * 0.1)
+
+    # ✨ (수정) 궤적 생성 (Linear Interpolation)
+    for i in range(pulse_steps):
+        # 0.0 (0/50) 부터 1.0 (50/50) 까지 t 값
+        t = (i + 1) / float(pulse_steps) 
+        current_theta = start_theta + (final_theta - start_theta) * t
+        current_phi = start_phi + (final_phi - start_phi) * t
+        trajectory_steps.append({"theta": current_theta, "phi": current_phi})
 
     final_energy += (qubits * 0.5)
     learning_time += (qubits * 0.8)
@@ -113,7 +143,9 @@ def run_simulation(qubits, strength, model):
         "optimalPulse": optimal_pulse_data,
         "finalEnergy": round(final_energy, 2),
         "learningTime": round(learning_time, 1),
-        "modelParams": int(model_params)
+        "modelParams": int(model_params),
+        # ✨ (수정) 궤적 반환
+        "trajectory": trajectory_steps
     }
 # -----------------------------------------------------------------
 
@@ -127,7 +159,6 @@ def handle_simulation():
         # 프론트엔드가 보낸 JSON 데이터 수신
         data = request.json
         
-        # ✨ (수정) 큐비트 기본값을 10 -> 8로 변경
         qubits = int(data.get('qubits', 8))
         strength = float(data.get('strength', 1.0))
         model = data.get('model', 'GCN')

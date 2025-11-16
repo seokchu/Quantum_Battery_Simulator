@@ -15,6 +15,11 @@
     <!-- Chart.js CDN 추가 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <!-- (추가) Three.js (3D 라이브러리) CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- (추가) Three.js OrbitControls (카메라 제어) CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
     <script>
         tailwind.config = {
             theme: {
@@ -51,16 +56,24 @@
             margin-top: 16px;
             text-align: center;
         }
+        /* (추가) 3D 캔버스 스타일 */
+        #bloch-sphere-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background-color: #f9fafb; /* bg-gray-50 */
+            border-radius: 8px;
+        }
     </style>
 </head>
 <body class="bg-gray-100 font-sans min-h-screen flex items-center justify-center p-4">
 
-    <div class="container mx-auto max-w-3xl"> <!-- 최대 너비 증가 -->
+    <div class="container mx-auto max-w-5xl"> <!-- (수정) 최대 너비 3XL -> 5XL로 증가 -->
 
         <!-- ========================== -->
         <!-- 페이지 1: 설정 -->
         <!-- ========================== -->
-        <div id="page-1" class="bg-white p-8 rounded-xl shadow-lg transition-all">
+        <div id="page-1" class="bg-white p-8 rounded-xl shadow-lg transition-all max-w-3xl mx-auto"> <!-- 페이지 1은 3XL 유지 -->
             <h1 class="text-3xl font-bold text-gray-900 mb-2">양자 배터리 최적 펄스 시뮬레이션</h1>
             <p class="text-gray-600 mb-8">시뮬레이션을 위한 파라미터를 선택하세요.</p>
 
@@ -69,7 +82,6 @@
                 <div>
                     <div class="flex justify-between items-center mb-2">
                         <label for="qubit-slider" class="font-semibold text-gray-700">큐비트 개수 (Number of Qubits)</label>
-                        <!-- ✨ (수정) 기본값 10 -> 8 -->
                         <span id="qubit-value" class="text-blue-600 font-bold text-lg bg-blue-50 px-3 py-1 rounded-md">8</span>
                     </div>
                     <input 
@@ -80,7 +92,6 @@
                         value="8" 
                         class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                     >
-                    <!-- ✨ (수정) 최대값 50 -> 8 -->
                     <div class="flex justify-between text-sm text-gray-500 mt-1">
                         <span>2</span>
                         <span>8</span>
@@ -156,7 +167,7 @@
                 모델 <span id="result-model" class="font-semibold text-green-600"></span>
             </p>
 
-            <!-- 요청 1: 최적 펄스 플롯 (새 섹션) -->
+            <!-- 펄스 플롯 (차트) -->
             <div class="mb-6 border border-gray-200 rounded-lg p-4 bg-gray-50 shadow-sm">
                 <h2 class="text-xl font-semibold text-gray-800 text-center mb-4">
                     최적 충전 펄스 (Optimal Charging Pulse)
@@ -166,7 +177,7 @@
                 </div>
             </div>
 
-            <!-- ✨ 요청 1: CSV 다운로드 버튼 (새로 추가) -->
+            <!-- CSV 다운로드 버튼 -->
             <div class="mb-10 text-center">
                 <button id="download-csv" class="bg-green-600 text-white font-bold py-2 px-5 rounded-lg shadow-md hover:bg-green-700 transition-all duration-300 ease-in-out disabled:bg-gray-400">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block -mt-1 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -177,7 +188,20 @@
             </div>
 
 
-            <!-- 플롯 섹션 (3가지 결과) (변경 없음) -->
+            <!-- ✨ (수정) 결과 섹션 레이아웃 변경 (요청 3) -->
+            
+            <!-- 3D 블로흐 구면 (중앙, 넓게) -->
+            <div class="mb-8 border border-gray-200 rounded-lg p-4 bg-gray-50 shadow-sm">
+                <h2 class="text-xl font-semibold text-gray-800 text-center mb-4">
+                    최종 상태 궤적 (Bloch Sphere Trajectory)
+                </h2>
+                <!-- 캔버스 컨테이너: 중앙 정렬 및 높이 고정 -->
+                <div class="relative h-[500px] max-w-2xl mx-auto cursor-move">
+                    <canvas id="bloch-sphere-canvas"></canvas>
+                </div>
+            </div>
+
+            <!-- 기존 3가지 플롯 (가로 3단) -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 
                 <!-- 플롯 1 -->
@@ -202,7 +226,7 @@
 
             <!-- 돌아가기 버튼 -->
             <div class="mt-10">
-                <button id="back-button" class="w-full bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-gray-700 transition-all duration-300 ease-in-out">
+                <button id="back-button" class="w-full bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-gray-700 transition-all duration-300 ease-in-out max-w-lg mx-auto block">
                     설정으로 돌아가기 (Back to Settings)
                 </button>
             </div>
@@ -211,6 +235,14 @@
     </div>
 
     <script>
+        // Three.js 스크립트는 DOMContentLoaded 밖에 전역으로 정의되어야 합니다.
+        // (CDN을 통해 THREE 객체가 window에 등록되기 때문)
+
+        // --- Three.js 전역 변수 ---
+        let blochScene, blochCamera, blochRenderer, blochControls, blochStateVector;
+        let blochAnimFrameId; // 애니메이션 프레임 ID (중지를 위함)
+        let blochTrajectoryLine = null; // ✨ (추가) 궤적 라인 객체
+
         document.addEventListener('DOMContentLoaded', () => {
             
             // --- 페이지 및 공통 요소 ---
@@ -221,7 +253,6 @@
             const loadingSpinner = document.getElementById('loading-spinner');
             const backButton = document.getElementById('back-button');
             const errorMessage = document.getElementById('error-message');
-            // ✨ (추가) CSV 다운로드 버튼
             const downloadCsvButton = document.getElementById('download-csv');
 
             // --- 페이지 1 요소 (입력) ---
@@ -238,9 +269,8 @@
             const imgTime = document.getElementById('plot-time');
             const imgParams = document.getElementById('plot-params');
 
-            // --- Chart.js 인스턴스 (요청 1) ---
+            // --- Chart.js 인스턴스 ---
             let pulseChartInstance = null; 
-            // ✨ (추가) CSV 저장을 위한 데이터 저장 변수
             let currentPulseData = [];
 
             // 백엔드 서버 주소 (app.py가 실행되는 곳)
@@ -269,7 +299,7 @@
                 errorMessage.style.display = 'none'; 
 
                 try {
-                    // --- 요청 3: 실제 백엔드 연동 (Fetch API 사용) ---
+                    // --- 실제 백엔드 연동 (Fetch API 사용) ---
                     const response = await fetch(API_ENDPOINT, {
                         method: 'POST',
                         headers: {
@@ -283,25 +313,22 @@
                     });
 
                     if (!response.ok) {
-                        // 서버가 에러를 반환한 경우 (500 Internal Server Error 등)
                         throw new Error(`서버 오류: ${response.statusText} (백엔드 서버가 실행 중인지 확인하세요)`);
                     }
 
-                    // 서버로부터 JSON 데이터 받기
                     const data = await response.json();
 
                     // --- 결과 표시 ---
-
-                    // 0. ✨ (추가) CSV 저장을 위해 펄스 데이터 저장
                     currentPulseData = data.optimalPulse || [];
+                    const trajectory = data.trajectory || []; // ✨ (추가) 궤적 데이터
 
                     // 1. 페이지 2 상단 요약 텍스트 업데이트
                     resultQubits.textContent = qubits;
                     resultStrength.textContent = strength.toFixed(1);
                     resultModel.textContent = model;
 
-                    // 2. 요청 1: 최적 펄스 차트 그리기
-                    renderPulseChart(currentPulseData); // 저장된 변수 사용
+                    // 2. 최적 펄스 차트 그리기
+                    renderPulseChart(currentPulseData);
 
                     // 3. 나머지 3개 결과 플롯 이미지 업데이트
                     const energyText = `Final Energy: ${data.finalEnergy}`;
@@ -316,8 +343,26 @@
                     page1.classList.add('hidden');
                     page2.classList.remove('hidden');
 
+                    // 5. ✨ (수정) 블로흐 구면 초기화 및 업데이트
+                    if (!blochRenderer) {
+                        // 렌더러가 없으면 (최초 실행) 초기화
+                        initBlochSphere();
+                    }
+                    // 애니메이션 루프 시작
+                    startBlochAnimation(); 
+                    
+                    // ✨ (수정) 궤적 및 최종 상태 업데이트 (요청 2)
+                    if (trajectory.length > 0) {
+                        // 1. 궤적 라인 그리기
+                        drawTrajectory(trajectory);
+                        
+                        // 2. 궤적의 마지막 지점에 화살표 그리기
+                        const finalState = trajectory[trajectory.length - 1];
+                        updateStateVector(finalState.theta, finalState.phi);
+                    }
+
+
                 } catch (error) {
-                    // 네트워크 에러 또는 fetch 실패 (예: 서버가 꺼져있음)
                     console.error('Fetch Error:', error);
                     errorMessage.textContent = `시뮬레이션 실패: ${error.message}. 'app.py'가 실행 중인지 확인하세요.`;
                     errorMessage.style.display = 'block';
@@ -333,37 +378,32 @@
             backButton.addEventListener('click', () => {
                 page2.classList.add('hidden');
                 page1.classList.remove('hidden');
+                
+                // (추가) 3D 애니메이션 중지 (자원 절약)
+                stopBlochAnimation();
             });
 
-            // --- ✨ 요청 1: CSV 다운로드 버튼 이벤트 리스너 ---
+            // --- CSV 다운로드 버튼 이벤트 리스너 ---
             downloadCsvButton.addEventListener('click', () => {
                 if (currentPulseData.length === 0) {
                     errorMessage.textContent = '먼저 시뮬레이션을 실행해주세요.';
                     errorMessage.style.display = 'block';
                     return;
                 }
-
                 try {
-                    // 1. CSV 내용 생성
                     let csvContent = "Time Step,Amplitude\n"; // 헤더
-
                     currentPulseData.forEach((amplitude, index) => {
                         csvContent += `${index},${amplitude}\n`;
                     });
-
-                    // 2. 다운로드 링크 생성 및 클릭
                     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                     const link = document.createElement("a");
                     const url = URL.createObjectURL(blob);
-                    
                     link.setAttribute("href", url);
                     link.setAttribute("download", "optimal_pulse.csv");
                     link.style.visibility = 'hidden';
-                    
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                    
                 } catch (error) {
                     console.error("CSV Download Error:", error);
                     errorMessage.textContent = 'CSV 파일 생성 중 오류가 발생했습니다.';
@@ -371,19 +411,13 @@
                 }
             });
 
-
-            // --- 요청 1: Chart.js 렌더링 함수 ---
+            // --- Chart.js 렌더링 함수 ---
             function renderPulseChart(pulseData) {
                 const ctx = document.getElementById('pulse-chart').getContext('2d');
-                
-                // 이전에 그려진 차트가 있다면 파괴 (메모리 누수 방지)
                 if (pulseChartInstance) {
                     pulseChartInstance.destroy();
                 }
-
-                // 차트 라벨 (예: 0, 1, 2, ... 49)
                 const labels = Array.from({ length: pulseData.length }, (_, i) => i);
-
                 pulseChartInstance = new Chart(ctx, {
                     type: 'line',
                     data: {
@@ -395,39 +429,199 @@
                             backgroundColor: 'rgba(54, 162, 235, 0.1)',
                             borderWidth: 2,
                             fill: true,
-                            tension: 0.1, // 약간 부드럽게
-                            pointRadius: 0, // 점 숨기기
+                            tension: 0.1,
+                            pointRadius: 0,
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                display: false // 범례 숨기기
-                            },
-                            tooltip: {
-                                mode: 'index',
-                                intersect: false,
-                            }
-                        },
+                        plugins: { legend: { display: false } },
                         scales: {
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: 'Time Step'
-                                }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: 'Amplitude'
-                                }
-                            }
+                            x: { title: { display: true, text: 'Time Step' } },
+                            y: { title: { display: true, text: 'Amplitude' } }
                         }
                     }
                 });
             }
+
+            // --- (추가) Three.js 블로흐 구면 관련 함수들 ---
+
+            function initBlochSphere() {
+                const canvas = document.getElementById('bloch-sphere-canvas');
+                if (!canvas) return;
+                
+                const container = canvas.parentElement;
+
+                // 1. Scene
+                blochScene = new THREE.Scene();
+
+                // 2. Camera
+                blochCamera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+                // ✨ (수정) 카메라 위치 변경 (요청 1) - Z축이 세로로 보이도록
+                blochCamera.position.set(2.5, 1.5, 2); 
+
+                // 3. Renderer
+                blochRenderer = new THREE.WebGLRenderer({ canvas: canvas, antalias: true, alpha: true });
+                blochRenderer.setSize(container.clientWidth, container.clientHeight);
+                blochRenderer.setPixelRatio(window.devicePixelRatio);
+                blochRenderer.setClearColor(0xf9fafb, 1); // bg-gray-50
+
+                // 4. Controls
+                blochControls = new THREE.OrbitControls(blochCamera, blochRenderer.domElement);
+                blochControls.enableDamping = true;
+                blochControls.dampingFactor = 0.1;
+                blochControls.screenSpacePanning = false;
+                // ✨ (추가) 항상 원점을 바라보도록 설정 (요청 1)
+                blochControls.target.set(0, 0, 0);
+                blochControls.update();
+
+                // 5. Lights
+                blochScene.add(new THREE.AmbientLight(0xaaaaaa));
+                const pointLight = new THREE.PointLight(0xffffff, 0.7);
+                pointLight.position.set(10, 10, 10);
+                blochScene.add(pointLight);
+
+                // 6. Draw Components
+                // 메인 구 (반투명)
+                const sphereGeom = new THREE.SphereGeometry(1, 32, 32);
+                const sphereMat = new THREE.MeshPhongMaterial({ 
+                    color: 0xcccccc, 
+                    transparent: true, 
+                    opacity: 0.2,
+                    shininess: 10
+                });
+                blochScene.add(new THREE.Mesh(sphereGeom, sphereMat));
+
+                // 축 (X, Y, Z) - Z가 세로(0,0,+-1.5)가 맞습니다.
+                const lineMat = new THREE.LineBasicMaterial({ color: 0x555555 });
+                blochScene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-1.5, 0, 0), new THREE.Vector3(1.5, 0, 0)]), lineMat)); // X
+                blochScene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -1.5, 0), new THREE.Vector3(0, 1.5, 0)]), lineMat)); // Y
+                blochScene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -1.5), new THREE.Vector3(0, 0, 1.5)]), lineMat)); // Z
+
+                // 라벨 (X, Y, Z, |0>, |1>)
+                blochScene.add(createSpriteText('X', new THREE.Vector3(1.7, 0, 0)));
+                blochScene.add(createSpriteText('Y', new THREE.Vector3(0, 1.7, 0)));
+                blochScene.add(createSpriteText('Z (|0>)', new THREE.Vector3(0, 0, 1.7)));
+                blochScene.add(createSpriteText('(|1>)', new THREE.Vector3(0, 0, -1.7)));
+                
+                // 8. 창 크기 조절 시 대응
+                // ResizeObserver를 사용하여 컨테이너 크기 변경 감지
+                new ResizeObserver(onBlochResize).observe(container);
+                onBlochResize(); // 초기 크기 설정
+            }
+
+            // 텍스트 라벨 생성 헬퍼
+            function createSpriteText(text, position) {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                context.font = 'bold 30px Inter, sans-serif';
+                const metrics = context.measureText(text);
+                canvas.width = metrics.width + 10;
+                canvas.height = 35;
+                context.font = 'bold 30px Inter, sans-serif';
+                context.fillStyle = '#374151'; // text-gray-700
+                context.fillText(text, 5, 30);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+                const sprite = new THREE.Sprite(spriteMat);
+                sprite.scale.set(canvas.width / 100, canvas.height / 100, 1.0);
+                sprite.position.copy(position);
+                return sprite;
+            }
+
+            // ✨ (수정) 궤적 그리기 함수 (요청 2)
+            function drawTrajectory(trajectory) {
+                if (!blochScene) return;
+
+                // 이전 궤적(라인)이 있다면 제거
+                if (blochTrajectoryLine) {
+                    blochScene.remove(blochTrajectoryLine);
+                    blochTrajectoryLine.geometry.dispose();
+                    blochTrajectoryLine.material.dispose();
+                }
+
+                const points = [];
+                trajectory.forEach(state => {
+                    const x = Math.sin(state.theta) * Math.cos(state.phi);
+                    const y = Math.sin(state.theta) * Math.sin(state.phi);
+                    const z = Math.cos(state.theta);
+                    points.push(new THREE.Vector3(x, y, z));
+                });
+
+                // |0> 상태(0,0,1)에서 시작점까지 이어지는 점 추가
+                points.unshift(new THREE.Vector3(0, 0, 1));
+
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 2 }); // 파란색 궤적
+                
+                blochTrajectoryLine = new THREE.Line(geometry, material);
+                blochScene.add(blochTrajectoryLine);
+            }
+
+            // 상태 벡터 (화살표) 업데이트 함수
+            function updateStateVector(theta, phi) {
+                if (!blochScene) return;
+
+                // 이전 벡터가 있다면 제거
+                if (blochStateVector) {
+                    blochScene.remove(blochStateVector);
+                }
+
+                // 구면 좌표 -> 직교 좌표 변환
+                const x = Math.sin(theta) * Math.cos(phi);
+                const y = Math.sin(theta) * Math.sin(phi);
+                const z = Math.cos(theta);
+
+                const dir = new THREE.Vector3(x, y, z).normalize();
+                const origin = new THREE.Vector3(0, 0, 0);
+                
+                // 새로운 화살표 생성
+                blochStateVector = new THREE.ArrowHelper(dir, origin, 1.0, 0xff0000, 0.2, 0.1); // 빨간색
+                blochScene.add(blochStateVector);
+            }
+
+            // 애니메이션 루프
+            function animateBloch() {
+                if (!blochRenderer) return;
+                blochAnimFrameId = requestAnimationFrame(animateBloch);
+                blochControls.update(); // 카메라 컨트롤 업데이트
+                
+                // 캔버스 크기 조절 감지
+                onBlochResize(); 
+                
+                blochRenderer.render(blochScene, blochCamera);
+            }
+            
+            function startBlochAnimation() {
+                stopBlochAnimation(); // 기존 루프가 있다면 중지
+                animateBloch();
+            }
+
+            function stopBlochAnimation() {
+                if (blochAnimFrameId) {
+                    cancelAnimationFrame(blochAnimFrameId);
+                    blochAnimFrameId = null;
+                }
+            }
+            
+            // 캔버스 크기 조절
+            function onBlochResize() {
+                if (!blochRenderer) return;
+                const canvas = blochRenderer.domElement;
+                const container = canvas.parentElement;
+                
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+
+                if (canvas.width !== width || canvas.height !== height) {
+                    blochRenderer.setSize(width, height, false); // false 중요 (style set 방지)
+                    blochCamera.aspect = width / height;
+                    blochCamera.updateProjectionMatrix();
+                }
+            }
+
         });
     </script>
 
