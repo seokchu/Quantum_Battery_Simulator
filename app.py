@@ -11,8 +11,6 @@ app = Flask(__name__)
 # -----------------------------------------------------------------
 # ✨ CORS 설정 수정 ✨
 # -----------------------------------------------------------------
-# (기존) CORS(app) <-- 이 줄을 아래 코드로 대체합니다.
-
 # VSCode Live Server의 기본 포트(5500, 5501 등)를 명시적으로 허용합니다.
 # 본인의 Live Server 포트가 다르면 목록에 추가해주세요. (포트 확인은 VSCode 우측 하단)
 allowed_origins = [
@@ -56,19 +54,11 @@ def run_simulation(qubits, strength, model):
     """
     
     # [가상 로직 1: 최적 펄스 생성]
-    # (실제로는 복잡한 연산 결과이겠지만, 여기서는 가상의 시계열 데이터를 생성합니다.)
-    # 펄스 길이를 50 스텝으로 고정
+    # ✨ (수정) 이제 모델별로 다른 펄스를 생성합니다. ✨
     pulse_steps = 50
-    # Numpy를 사용해 부드러운 펄스 모양(예: sin + noise)을 만듭니다.
-    base_pulse = np.sin(np.linspace(0, np.pi * 2, pulse_steps)) * strength
-    noise = np.random.randn(pulse_steps) * 0.1 * (qubits / 50)
-    optimal_pulse = base_pulse + noise
-    # JSON으로 보내기 위해 list로 변환
-    optimal_pulse_data = list(optimal_pulse)
-
+    optimal_pulse_data = [] # 빈 리스트로 초기화
 
     # [가상 로직 2: 결과 지표 3가지 생성]
-    # (V2에서 사용했던 로직을 서버로 이전)
     final_energy = 100.0
     learning_time = 5.0
     model_params = 10000
@@ -77,18 +67,37 @@ def run_simulation(qubits, strength, model):
         final_energy += 30.0
         learning_time += 5.0
         model_params = 50000
+        # (펄스 생성 1)
+        base_pulse = np.sin(np.linspace(0, np.pi * 2, pulse_steps)) * strength * 0.8 # 80% A
+        noise = np.random.randn(pulse_steps) * 0.15 # 노이즈 증가
+        optimal_pulse_data = list(base_pulse + noise)
+
     elif model == 'MLP (Set)':
         final_energy += 15.0
         learning_time += 10.0
         model_params = 80000
+        # (펄스 생성 2)
+        base_pulse = np.sin(np.linspace(0, np.pi * 3, pulse_steps)) * strength # 주파수 1.5배
+        noise = np.random.randn(pulse_steps) * 0.1
+        optimal_pulse_data = list(base_pulse + noise)
+
     elif model == 'GCN':
         final_energy -= 10.0
         learning_time += 15.0
         model_params = 150000
+        # (펄스 생성 3) - 기존 로직
+        base_pulse = np.sin(np.linspace(0, np.pi * 2, pulse_steps)) * strength
+        noise = np.random.randn(pulse_steps) * 0.1 * (qubits / 8.0) # 큐비트 최대 8로 스케일
+        optimal_pulse_data = list(base_pulse + noise)
+
     elif model == 'GAT':
         final_energy -= 15.0
         learning_time += 20.0
         model_params = 250000
+        # (펄스 생성 4)
+        base_pulse = np.cos(np.linspace(0, np.pi * 2, pulse_steps)) * strength # Cosine 펄스
+        noise = np.random.randn(pulse_steps) * 0.05 # 노이즈 감소
+        optimal_pulse_data = list(base_pulse + noise)
 
     final_energy += (qubits * 0.5)
     learning_time += (qubits * 0.8)
@@ -107,6 +116,8 @@ def run_simulation(qubits, strength, model):
         "modelParams": int(model_params)
     }
 # -----------------------------------------------------------------
+
+
 @app.route('/simulate', methods=['POST'])
 def handle_simulation():
     """
@@ -116,7 +127,8 @@ def handle_simulation():
         # 프론트엔드가 보낸 JSON 데이터 수신
         data = request.json
         
-        qubits = int(data.get('qubits', 10))
+        # ✨ (수정) 큐비트 기본값을 10 -> 8로 변경
+        qubits = int(data.get('qubits', 8))
         strength = float(data.get('strength', 1.0))
         model = data.get('model', 'GCN')
 
